@@ -1,0 +1,281 @@
+---
+title: "679 Final Project"
+author: "Dongkai Wu, Yifeng Fan, Shengbo Wang"
+date: "2023-04-27"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(forecast)
+library(dplyr)
+library(tseries)
+```
+
+
+```{r,include=FALSE}
+Energy_gen <- read.csv('Custom_chart_monthly.csv', skip = 4)
+Energy_gen <- Energy_gen[,-c(3:5)]
+colnames(Energy_gen) <- c("month", "value")
+Energy_gen$month <- as.Date(paste0("01 ", Energy_gen$month), format = "%d %b %Y")
+Energy_gen <- Energy_gen[complete.cases(Energy_gen), ]
+Energy_gen <- Energy_gen %>% arrange(month)
+```
+
+# Indroduction
+Renewable energy is increasingly significant in various industries, such as transportation, heating, and cooling, and its adoption is transforming business operations in Colorado. The analysis focused on understanding the impact of adopting renewable energy on business operations. The results revealed that wind turbines produce the greatest amount of electricity during the months around March, while the lowest energy generation occurs around August. Consequently, businesses that rely on wind power should adjust their production plans accordingly, with higher workloads during the winter months and lower workloads during the summer.
+
+
+# Data
+I utilized data from the U.S. Energy Information Administration Website (https://www.eia.gov/state/?sid=CO) for my analysis. The dataset was carefully preprocessed by removing irrelevant columns and rows. The resulting data is clean and well-organized, free of any missing values. 
+
+
+## Visualization
+
+
+```{r, echo=FALSE}
+plot(Energy_gen, type = "l", xlab = "Month", ylab = "Net GeneratioN (Thousand Megawatthours)", main = "Colorado Net Electricity Generation by Wind")
+```
+
+After examining the data, it is noticeable that the time series displays a non-stationary nature with a continuous upward trend starting from 2008. Moreover, a noticeable seasonal pattern is evident from the plotted data. To validate the presence of both trend and seasonality, I generated a decomposition chart (Figure 2). The decomposition chart clearly illustrates the prominent upward trend and the recurring seasonal pattern in the data. These findings emphasize the importance of addressing the trend and seasonality components when modeling and analyzing the time series data.
+
+
+## Decomposition 
+
+
+```{r,echo=FALSE}
+# Create a time series object from the data
+ts_data <- ts(Energy_gen$value, frequency = 12, start = c(2001,1))
+z=decompose(ts_data,type="additive")
+plot(z)
+
+```
+
+
+```{r,echo=FALSE}
+differenced_ts <- diff(ts_data, lag = 12)
+plot(differenced_ts, ylab = "Differenced Value")
+```
+
+
+
+## Differencing data
+
+To train and select the most appropriate model for my analysis, I initially applied differencing to the data, resulting in a stationary time series (refer to Figure 3). To validate the stationarity of the differenced data, I conducted the Dickey-Fuller test. The obtained p-value of 0.01 indicates statistical significance, confirming that the differenced data is indeed stationary. This ensures that the subsequent modeling and analysis can be conducted reliably.
+
+
+```{r, echo=FALSE}
+differenced_ts <- diff(ts_data, lag = 12)
+plot(differenced_ts)
+
+```
+
+
+dsfghj
+zxdcfgh
+
+dsfghj
+
+dsfghj
+
+sdfghj
+
+```{r, warning=FALSE, echo=FALSE}
+library(tseries)
+result <- adf.test(differenced_ts)
+print(result)
+```
+
+# Model Fitting
+
+## Arima
+To forecast future values of the time series, I used a seasonal ARIMA model. The model-based approach fits an
+ARIMA model to data to then forecast. From the ACF and PACF plots (see Fig. 5), it seems reasonable to consider a low
+order ARMA model. The PACF cuts off near lag 2 decaying to 0 and the ACF cuts off after lag 2 decaying to 0. However,
+although there is an early cutoff, the lag significance returns around month 12 and this periodic pattern is a characteristic
+of seasonality with period 12 (stochastic part). This confirms what was observed in the seasonal component from Fig.3.
+
+
+```{r, echo=FALSE}
+par(mfrow = c(1,2))
+acf(differenced_ts,lag.max = 18)
+pacf(differenced_ts,lag.max = 18)
+```
+
+To predict future values of the time series, I initially employed a seasonal ARIMA model. This model-based approach involves fitting an ARIMA model to the data and utilizing it for forecasting. By examining the ACF and PACF plots (refer to Figure 5), it appears reasonable to consider a lower-order ARMA or AR model. The PACF demonstrates a cutoff at lag 2, gradually decaying to 0, while the ACF exhibits a clear trend that eventually decays to 0. However, despite the early cutoff, the significance of the lag emerges again around the 13th month, indicating a periodic pattern characteristic of seasonality with a period of 12.  
+
+
+
+
+```{r,include=FALSE}
+train <- ts(Energy_gen$value[1:240], frequency = 12, start = c(2001,1))
+test <- Energy_gen$value[241:264]
+```
+
+
+## Arima Model Selection
+
+With my hypothesis that lower order of ARMA or AR model would fit the best, I tried several models and I pick the model with the lowest AIC score (see table.1) which is  ARMA (2,1,0) x SARMA (1,0,0)12 model. 
+
+```{r, echo=FALSE}
+fit1 <- Arima(train, order = c(1, 0, 1), seasonal = c(1, 0, 0), lambda = 0)
+
+fit2 <- Arima(train, order = c(1, 1, 1), seasonal = c(1, 0, 0), lambda = 0)
+
+fit3 <- Arima(train, order = c(1, 1, 1), seasonal = c(1, 1, 0), lambda = 0)
+
+fit4 <- Arima(train, order = c(1, 1, 1), seasonal = c(1, 0, 1), lambda = 0)
+
+
+fit5 <- Arima(train, order = c(2, 1, 0), seasonal = c(1, 0, 0), lambda = 0)
+
+
+fit6 <- Arima(train, order = c(0, 1, 2), seasonal = c(1, 0, 0), lambda = 0)
+
+Comparison_table <- data.frame(
+  Model = c("  (1, 0, 1)x(1, 0, 0)", "  (1, 1, 1)x(1, 0, 0)","(1, 1, 1)x(1, 1, 0)","(1, 1, 1)x(1, 0, 1)","-> (2, 1, 0)x(1, 0, 0)","(0, 1, 2)x(1, 0, 0)"),
+  AIC = c(23.64, 11.64, 37.8, 13.88, 11.19,12.06)
+)
+
+print(Comparison_table)
+```
+
+
+```{r,echo=FALSE}
+plot(forecast(fit5, h = 24), ylim = c(0,2500))
+```
+
+Upon observing the diagnostic plots(see Fig.5), it is evident that the model performs exceptionally well. The residuals exhibit a random pattern with no discernible trends or patterns, indicating that the model adequately captures the underlying information in the data. The mean of the residuals is centered around zero, suggesting an unbiased model. The spread of the residuals remains consistent over time, indicating appropriate variance estimation. Additionally, the autocorrelation of the residuals is close to zero for all lags, suggesting that the model effectively captures the serial dependence in the data. Overall, the diagnostic plots demonstrate a robust and reliable model fit.
+
+```{r,echo=FALSE}
+fit=Arima(train,order=c(2,1,0), seasonal=list(order=c(1,0,0),period=12),lambda=0) 
+tsdiag(fit)
+```
+
+
+
+## Holt-Winters Model
+Besides the Arima model there is another model called Holt-Winters model. The Holt-Winters model, also known as triple exponential smoothing, is a time series forecasting method that takes into account trend, seasonality, and level components of the data. It uses exponential smoothing techniques to make predictions based on past observations and adjusts for both trend and seasonality. Given that the seasonal pattern of the data has constant increasing rate throughout the observed range, I employed the multiplicative version of the Holt-Winters model. The resulting forecast appears sensible and aligns well with the underlying patterns in the data.
+
+```{r,echo=FALSE}
+# Perform time series forecasting
+HWpre <- HoltWinters(train, seasonal = "multiplicative")
+
+plot(forecast(HWpre, h = 24))
+```
+
+
+# Evaluation
+
+To evaluate the performance of the two models, I reserved 24 observations, equivalent to 10% of the total data, as a test dataset. It was important to retain enough seasonal patterns in the test sample for accurate assessment. I employed metrics such as root mean square error (RMSE), mean absolute error (MAE), and mean absolute percentage error (MAPE) to measure the forecast accuracy. Based on these metrics, the seasonal Holt-Winters model outperformed the seasonal ARIMA model, as indicated in Table 2.
+
+## RMSE & MAPE
+```{r,echo=FALSE}
+arimaerr <- test-forecast(fit, h = 24)$mean
+arimamae <- mean(abs(arimaerr))
+arimarmse <- sqrt(mean(arimaerr^2))
+arimamape <- mean(abs((arimaerr*100)/test))
+
+HWerr <- test-forecast(HWpre, h = 24)$mean
+HWmae <- mean(abs(HWerr))
+HWrmse <- sqrt(mean(HWerr^2))
+HWmape <- mean(abs((HWerr*100)/test))
+
+Comparison_table <- data.frame(
+  Name = c("ARIMA", "Holt-Winters"),
+  MAE = c(arimamae, HWmae),
+  RMSE = c(arimarmse, HWrmse),
+  MAPE = c(arimamape,HWmape)
+)
+
+print(Comparison_table)
+
+```
+
+
+# Appling the Holt-Winters model and Findings
+
+
+```{r,echo=FALSE}
+forecast_result <- HoltWinters(ts_data, seasonal = "multiplicative")
+
+plot(forecast(forecast_result, h = 24), main = "Future Forcast with Holt-Winters Model")
+```
+
+The time series analysis of renewable energy generated from wind over the past 20 years in Colorado reveals a notable pattern, with the lowest energy generation consistently occurring around August each year and the highest point reached around March. This discovery holds significant implications for understanding the dynamics of wind energy production and can inform strategic decision-making for renewable energy planning and management.
+
+During the months of lower wind energy generation, such as August, businesses may face a relatively lower availability of renewable energy. To compensate for this potential energy shortfall, businesses can implement energy management practices and technologies to optimize their energy consumption. This could involve implementing energy-efficient measures, such as upgrading equipment, improving insulation, and utilizing smart energy management systems to minimize energy waste.
+
+On the other hand, during the months of higher wind energy generation, particularly around April, businesses can take advantage of the increased availability of renewable energy. They can align their energy-intensive operations, such as manufacturing processes or equipment usage, to coincide with this period. By leveraging the abundance of renewable energy, businesses can reduce their reliance on non-renewable sources and lower their overall carbon footprint.
+
+# Using GLM Model to Find Possible Influential Factors 
+
+```{r}
+Net_industrial <- read_csv("Net_generation_Colorado_all_industrial_monthly.csv",skip=4)
+colnames(Net_industrial) <- c("Month","All_fuel","Other_renewable","Solar")
+Net_industrial[is.na(Net_industrial)] <- 0
+Net_industrial <- Net_industrial %>% mutate("Percentage"=(Other_renewable+Solar)/(All_fuel+Solar)*100)
+date_obj <- as.Date(paste0("01 ", Net_industrial$Month), format = "%d %b %Y")
+
+#########
+renewable <- read_csv("electricity from renewable.csv",skip=6) %>% 
+  select(Month="Source...1" ,Hydro_ele="EIA, U.S. Energy Information Administration...2",Wind_ele="EIA, U.S. Energy Information Administration...4",Solar_ele="EIA, U.S. Energy Information Administration...6")
+# Convert month column to date format
+renewable$Month <- ymd(paste0(renewable$Month, "01"))
+
+# Convert date format to "MON YYYY" format
+renewable$Month <- format(renewable$Month, "%b %Y")
+
+###########
+#average coal price
+coal_unit_price <- read_csv("Average_cost_of_fossil_fuels_for_electricity_generation_for_all_sectors_monthly.csv",skip=4)
+colnames(coal_unit_price) <- c("Month","Coal_Price")
+
+##############
+ele_generate <- read_csv("electricity generation.csv",skip=6) %>% 
+  select(Month="Source...1" ,Coal="EIA, U.S. Energy Information Administration...2",NG="EIA, U.S. Energy Information Administration...4")
+
+ele_generate$Month <- ymd(paste0(ele_generate$Month, "01"))
+
+# Convert date format to "MON YYYY" format
+ele_generate$Month <- format(ele_generate$Month, "%b %Y")
+#################
+wages <- read_csv("COPOP2.csv")
+wages$DATE <- as.Date(wages$DATE,format = "%Y/%m/%d")
+wages$DATE <- format(wages$DATE, "%b %Y")
+colnames(wages) <- c("Month","COPOP","n")
+```
+
+
+```{r}
+#combind data
+raw1 <- inner_join(Net_industrial,renewable)
+raw2 <- inner_join(raw1,coal_unit_price)
+raw3 <- inner_join(raw2,wages[,-3])
+df <- inner_join(raw3,ele_generate)
+df[is.na(df)] <- 0
+```
+
+
+```{r}
+library(glmnet)
+#glm
+# fit <- lm(Percentage~.-Month,df)
+fit <- glm( Percentage ~ All_fuel + Other_renewable + Solar + 
+    Coal_Price + COPOP + Coal, data = df)
+summary(fit)
+```
+
+
+# Conclusion
+In conclusion, the analysis focused on the impact of adopting renewable energy on business operations in Colorado. The findings revealed a clear seasonal pattern in wind energy production, with peak electricity generation occurring around March and a decline in energy production around August. This information suggests that businesses utilizing wind power should align their production plans accordingly to optimize their operations. Additionally, the evaluation of forecast accuracy indicated that the seasonal Holt-Winters model outperformed the seasonal ARIMA model. This implies that the Holt-Winters model is a suitable choice for forecasting in this context.
+
+
+
+# Reference
+
+1. What are the different types of renewable energy? National Grid Group. (n.d.). Retrieved April 29, 2023, from https://www.nationalgrid.com/stories/energy-explained/what-are-different-types-renewable-energy#:~:text=Renewable%20energy%20is%20energy%20that,and%20hydroelectric%2C%20including%20tidal%20energy. 
+
+2. https://www.energyoutreach.org/
+
